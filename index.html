@@ -900,30 +900,28 @@ function rList() {
     if (c.mecaList) { for (var j=0;j<c.mecaList.length;j++) { if (parseFloat(c.mecaList[j].cout) > 0) nf++; } }
     if (c.piecesList) { for (var j=0;j<c.piecesList.length;j++) { if (parseFloat(c.piecesList[j].cout) > 0) nf++; } }
     var photoHtml = c.photo
-      ? '<img class="ci-img" src="' + c.photo + '">'
+      ? '<img class="ci-img" src="' + c.photo + '" style="width:100%;height:170px;object-fit:cover;display:block;">'
       : '<div class="ci-no-photo">&#x1F697;</div>';
     h += '<div class="ci" onclick="openStockDetail(' + i + ')">' +
       photoHtml +
       '<div class="ci-body">' +
         '<div style="flex:1;min-width:0;">' +
           '<div class="ci-name">' + (c.marque||'?') + ' ' + (c.modele||'') + '</div>' +
-          '<div class="ci-sub">' + (c.dachat||'--') + '</div>' +
-          // Ligne montants
-          '<div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap;">' +
-            '<div style="background:var(--n3);border:1px solid var(--g2);border-radius:2px;padding:6px 10px;">' +
-              '<div style="font-size:9px;letter-spacing:1px;color:var(--g4);margin-bottom:2px;">ACHAT</div>' +
-              '<div style="font-family:Georgia,serif;font-size:15px;font-weight:700;color:var(--b1);">' + E(r.achat) + '</div>' +
+          '<div class="ci-sub">' + (c.dachat||'--') + (nf > 0 ? ' &middot; ' + nf + ' frais' : '') + '</div>' +
+          '<div style="display:flex;gap:5px;margin-top:8px;">' +
+            '<div style="background:var(--n3);border:1px solid var(--g1);padding:6px 8px;text-align:center;">' +
+              '<div style="font-size:7px;letter-spacing:1.5px;text-transform:uppercase;color:var(--g4);margin-bottom:2px;">ACHAT</div>' +
+              '<div style="font-size:13px;font-weight:800;">' + E(r.achat) + '</div>' +
             '</div>' +
-            '<div style="background:var(--n3);border:1px solid ' + (r.frais > 0 ? 'var(--gold-dark)' : 'var(--grey2)') + ';border-radius:2px;padding:6px 10px;">' +
-              '<div style="font-size:9px;letter-spacing:1px;color:var(--g4);margin-bottom:2px;">REVIENT</div>' +
-              '<div style="font-family:Georgia,serif;font-size:15px;font-weight:700;color:' + (r.frais > 0 ? '#C9A84C' : 'var(--grey3)') + ';">' + E(r.revient) + '</div>' +
+            '<div style="background:var(--n3);border:1px solid ' + (r.frais>0?'rgba(200,150,60,.3)':'var(--g1)') + ';padding:6px 8px;text-align:center;">' +
+              '<div style="font-size:7px;letter-spacing:1.5px;text-transform:uppercase;color:var(--g4);margin-bottom:2px;">REVIENT</div>' +
+              '<div style="font-size:13px;font-weight:800;color:' + (r.frais>0?'var(--or2)':'var(--b1)') + ';">' + E(r.revient) + '</div>' +
             '</div>' +
           '</div>' +
         '</div>' +
-        '<div style="display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;gap:8px;flex-shrink:0;">' +
-          '<div style="font-size:9px;letter-spacing:1px;color:var(--or2);font-weight:700;">VENDU</div>' +
-          (nf > 0 ? '<div style="font-size:10px;color:var(--g4);">' + nf + ' frais</div>' : '') +
-          '<button class="bdl" onclick="event.stopPropagation();delCar(' + i + ')" title="Supprimer">&#x1F5D1;</button>' +
+        '<div style="display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;gap:6px;flex-shrink:0;margin-left:8px;">' +
+          '<button onclick="event.stopPropagation();marquerVendu(' + i + ')" style="background:var(--pos);border:none;color:#fff;padding:7px 10px;font-size:9px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;white-space:nowrap;">&#x2714; Vendu</button>' +
+          '<button class="ci-del" onclick="event.stopPropagation();delCar(' + i + ')">&#x1F5D1;</button>' +
         '</div>' +
       '</div></div>';
   }
@@ -1039,161 +1037,218 @@ function closeStockDetail() {
   document.getElementById('stockDetailOv').classList.remove('open');
 }
 
+function marquerVendu(idx) {
+  var c = cars[idx];
+  var nom = (c.marque||'?') + ' ' + (c.modele||'');
+  // Ouvrir le modal de la voiture pour remplir prix et date de revente
+  openModal(idx);
+  // Scroll vers la section revente
+  setTimeout(function() {
+    var el = document.getElementById('fpr');
+    if (el) {
+      el.scrollIntoView({behavior: 'smooth', block: 'center'});
+      el.focus();
+    }
+  }, 400);
+  showToast('Remplissez le prix et la date de revente');
+}
+
 function rDetail() {
   var el = document.getElementById('detailList');
+
+  // Collecter voitures vendues
   var sold = [];
   for (var i = 0; i < cars.length; i++) {
-    if (parseFloat(cars[i].prevente) > 0) sold.push({car:cars[i], sidx:i});
+    if (parseFloat(cars[i].prevente) > 0) sold.push({car: cars[i], sidx: i});
   }
 
   if (!sold.length) {
-    el.innerHTML = '<div class="em"><div class="ei">&#x1F3C6;</div><p>Aucune voiture vendue<br>Les ventes apparaissent ici</p></div>';
+    el.innerHTML = '<div class="em"><div class="ei">&#x1F3C6;</div><p>Aucune voiture vendue<br>Les ventes apparaissent ici<br>organisees par mois</p></div>';
     return;
   }
 
-  var totBenef = 0, totRev = 0, totInvesti = 0;
-  for (var i = 0; i < sold.length; i++) {
-    var rr = calc(sold[i].car);
-    if (rr.benef !== null) totBenef += rr.benef;
-    totRev += rr.revente;
-    totInvesti += rr.revient;
-  }
+  // Trier par date de revente (plus recent en premier)
+  sold.sort(function(a, b) {
+    var da = a.car.drevente || '0000-00-00';
+    var db = b.car.drevente || '0000-00-00';
+    return db < da ? -1 : db > da ? 1 : 0;
+  });
 
-  // Banniere résumé
-  var h = '<div style="background:var(--n2);border:1px solid #3a3020;margin-bottom:14px;overflow:hidden;">' +
-    '<div style="height:2px;background:linear-gradient(90deg,var(--gold),var(--gold2),var(--gold));"></div>' +
-    '<div style="padding:16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;">' +
-      '<div><div style="font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--g4);margin-bottom:6px;">VENDUES</div>' +
-        '<div style="font-size:26px;font-weight:900;color:var(--b1);">' + sold.length + '</div></div>' +
-      '<div><div style="font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--g4);margin-bottom:6px;">REVENTES</div>' +
-        '<div style="font-size:14px;font-weight:800;color:var(--b1);">' + E(totRev) + '</div></div>' +
-      '<div><div style="font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--g4);margin-bottom:6px;">BENEFICE</div>' +
-        '<div style="font-size:14px;font-weight:800;color:' + (totBenef>=0?'var(--gold2)':'#e05050') + ';">' + (totBenef>=0?'+':'') + E(totBenef) + '</div></div>' +
-    '</div></div>';
+  // Grouper par mois
+  var MOIS = ['Janvier','Fevrier','Mars','Avril','Mai','Juin',
+              'Juillet','Aout','Septembre','Octobre','Novembre','Decembre'];
+  var groupes = {}; // key = "YYYY-MM"
+  var ordreGroupes = [];
 
-  // Liste des véhicules vendus
   for (var i = 0; i < sold.length; i++) {
     var c = sold[i].car;
-    var sidx = i;
-    var realIdx = sold[i].sidx;
+    var dr = c.drevente;
+    var key = '0000-00'; var label = 'Date inconnue';
+    if (dr && dr.length >= 7) {
+      key = dr.substring(0, 7);
+      var parts = key.split('-');
+      label = MOIS[parseInt(parts[1]) - 1] + ' ' + parts[0];
+    }
+    if (!groupes[key]) {
+      groupes[key] = {label: label, items: [], benef: 0, rev: 0, nb: 0};
+      ordreGroupes.push(key);
+    }
     var r = calc(c);
-    var isPos = r.benef !== null && r.benef >= 0;
-    var bcolor = isPos ? 'var(--gold2)' : '#e05050';
-    var mp = r.revient > 0 ? Math.min(Math.abs((r.marge||0)*100), 100) : 0;
+    groupes[key].items.push({car: c, sidx: sold[i].sidx, r: r});
+    groupes[key].nb++;
+    groupes[key].rev += r.revente;
+    if (r.benef !== null) groupes[key].benef += r.benef;
+  }
 
-    var photoHtml = c.photo
-      ? '<img src="' + c.photo + '" style="width:100%;height:150px;object-fit:cover;display:block;">'
-      : '<div style="width:100%;height:80px;background:var(--n3);display:flex;align-items:center;justify-content:center;font-size:32px;border-bottom:1px solid var(--grey);">&#x1F697;</div>';
+  // Stats globales
+  var totBenef = 0, totRev = 0;
+  for (var i = 0; i < sold.length; i++) {
+    var rr = calc(sold[i].car);
+    totRev += rr.revente;
+    if (rr.benef !== null) totBenef += rr.benef;
+  }
 
-    h += '<div style="background:var(--n2);border:1px solid var(--g1);margin-bottom:12px;overflow:hidden;">' +
-      // Barre couleur haut
-      '<div style="height:2px;background:' + bcolor + ';"></div>' +
-      photoHtml +
-      // Header voiture
-      '<div style="padding:14px 14px 10px;border-bottom:1px solid var(--grey);">' +
-        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">' +
-          '<div style="flex:1;">' +
-            '<div style="font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--g4);margin-bottom:4px;">Vendu le ' + (c.drevente||'--') + '</div>' +
-            '<div style="font-size:20px;font-weight:900;color:var(--b1);letter-spacing:.5px;">' + (c.marque||'?') + ' ' + (c.modele||'') + '</div>' +
-            '<div style="font-size:11px;color:var(--g4);margin-top:3px;">Achete le ' + (c.dachat||'--') + '</div>' +
+  // Banniere globale
+  var h = '<div class="vb">' +
+    '<div><div class="vb-l">Vendues</div><div class="vb-v">' + sold.length + '</div></div>' +
+    '<div><div class="vb-l">Reventes</div><div class="vb-v">' + E(totRev) + '</div></div>' +
+    '<div><div class="vb-l">Benefice</div><div class="vb-v or">' + (totBenef>=0?'+':'') + E(totBenef) + '</div></div>' +
+  '</div>';
+
+  // Rendu par mois
+  for (var gi = 0; gi < ordreGroupes.length; gi++) {
+    var key = ordreGroupes[gi];
+    var g = groupes[key];
+    var bc = g.benef >= 0 ? 'var(--pos)' : 'var(--neg)';
+
+    // En-tete mois
+    h += '<div style="margin-bottom:14px;">' +
+      // Header mois
+      '<div style="background:var(--n2);border:1px solid var(--g1);border-top:1.5px solid var(--or);margin-bottom:8px;overflow:hidden;">' +
+        '<div style="padding:12px 14px;display:flex;justify-content:space-between;align-items:center;">' +
+          '<div>' +
+            '<div style="font-size:8px;letter-spacing:3px;text-transform:uppercase;color:var(--g4);margin-bottom:3px;">Mois</div>' +
+            '<div style="font-size:20px;font-weight:900;color:var(--or2);">' + g.label + '</div>' +
           '</div>' +
-          '<div style="text-align:right;flex-shrink:0;">' +
-            '<div style="font-size:8px;letter-spacing:1px;text-transform:uppercase;color:var(--g4);margin-bottom:3px;">' + (isPos?'BENEFICE':'PERTE') + '</div>' +
-            '<div style="font-size:22px;font-weight:900;color:' + bcolor + ';">' + (isPos?'+':'') + E(r.benef) + '</div>' +
-            '<div style="font-size:11px;color:var(--g4);margin-top:2px;">' + (r.marge !== null ? P(r.marge) : '--') + '</div>' +
-          '</div>' +
-        '</div>' +
-        // Barre progression
-        '<div style="height:2px;background:var(--grey);margin-top:10px;overflow:hidden;">' +
-          '<div style="height:100%;width:' + mp + '%;background:' + bcolor + ';"></div>' +
-        '</div>' +
-      '</div>' +
-
-      // Chiffres clés
-      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--grey);">' +
-        '<div style="background:var(--n3);padding:12px;text-align:center;">' +
-          '<div style="font-size:8px;letter-spacing:1px;text-transform:uppercase;color:var(--g4);margin-bottom:5px;">ACHAT</div>' +
-          '<div style="font-size:14px;font-weight:800;color:var(--b1);">' + E(r.achat) + '</div>' +
-        '</div>' +
-        '<div style="background:var(--n3);padding:12px;text-align:center;">' +
-          '<div style="font-size:8px;letter-spacing:1px;text-transform:uppercase;color:var(--g4);margin-bottom:5px;">REVIENT</div>' +
-          '<div style="font-size:14px;font-weight:800;color:var(--neg);">' + E(r.revient) + '</div>' +
-        '</div>' +
-        '<div style="background:var(--n3);padding:12px;text-align:center;">' +
-          '<div style="font-size:8px;letter-spacing:1px;text-transform:uppercase;color:var(--g4);margin-bottom:5px;">VENDU</div>' +
-          '<div style="font-size:14px;font-weight:800;color:var(--or2);">' + E(r.revente) + '</div>' +
-        '</div>' +
-      '</div>' +
-
-      // Frais si existants
-      (r.frais > 0 ?
-        '<div style="padding:10px 14px;border-top:1px solid var(--grey);border-bottom:1px solid var(--grey);background:var(--n3);display:flex;justify-content:space-between;align-items:center;">' +
-          '<div style="font-size:11px;color:var(--g4);">Total frais (meca + pieces)</div>' +
-          '<div style="font-size:13px;font-weight:800;color:var(--neg);">+ ' + E(r.frais) + '</div>' +
-        '</div>' : '') +
-
-      // Part benefice Youssef & Alex
-      '<div style="padding:12px 14px;border-top:1px solid var(--grey);">' +
-        '<div style="font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--g4);margin-bottom:10px;">Part benefice (50/50)</div>' +
-        '<div style="display:flex;gap:8px;">' +
-          '<div style="flex:1;background:rgba(200,40,30,.1);border:1px solid rgba(200,40,30,.3);padding:10px;text-align:center;">' +
-            '<div style="font-size:11px;font-weight:700;color:#c8281e;margin-bottom:4px;">YOUSSEF</div>' +
-            '<div style="font-size:15px;font-weight:900;color:var(--b1);">' + (r.benef !== null ? E(r.benef/2) : '--') + '</div>' +
-          '</div>' +
-          '<div style="flex:1;background:rgba(26,58,92,.2);border:1px solid rgba(26,58,92,.4);padding:10px;text-align:center;">' +
-            '<div style="font-size:11px;font-weight:700;color:#6a9adc;margin-bottom:4px;">ALEX</div>' +
-            '<div style="font-size:15px;font-weight:900;color:var(--b1);">' + (r.benef !== null ? E(r.benef/2) : '--') + '</div>' +
+          '<div style="text-align:right;">' +
+            '<div style="font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--g4);margin-bottom:3px;">' + g.nb + ' vente' + (g.nb>1?'s':'') + '</div>' +
+            '<div style="font-size:22px;font-weight:900;color:' + bc + ';">' + (g.benef>=0?'+':'') + E(g.benef) + '</div>' +
           '</div>' +
         '</div>' +
-      '</div>' +
+        // Mini stats mois
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--g1);">' +
+          '<div style="background:var(--n3);padding:10px;text-align:center;">' +
+            '<div style="font-size:7.5px;letter-spacing:2px;text-transform:uppercase;color:var(--g4);margin-bottom:4px;">Total reventes</div>' +
+            '<div style="font-size:14px;font-weight:800;">' + E(g.rev) + '</div>' +
+          '</div>' +
+          '<div style="background:var(--n3);padding:10px;text-align:center;border-left:1.5px solid ' + bc + ';">' +
+            '<div style="font-size:7.5px;letter-spacing:2px;text-transform:uppercase;color:var(--g4);margin-bottom:4px;">Benefice du mois</div>' +
+            '<div style="font-size:14px;font-weight:900;color:' + bc + ';">' + (g.benef>=0?'+':'') + E(g.benef) + '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
 
-      // Badge comptabilise
-      (c.comptabilise ?
-        '<div style="background:rgba(40,120,60,.15);border-top:1px solid rgba(40,120,60,.3);padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">' +
-          '<div style="display:flex;align-items:center;gap:8px;">' +
-            '<span style="font-size:16px;">&#x2705;</span>' +
-            '<div>' +
-              '<div style="font-size:12px;font-weight:800;color:var(--pos);letter-spacing:1px;">COMPTABILISE</div>' +
-              '<div style="font-size:10px;color:var(--g4);">Le ' + (c.comptabiliseDate||'--') + ' par ' + (c.comptabilisePar||'--') + '</div>' +
+    // Voitures du mois
+    for (var vi = 0; vi < g.items.length; vi++) {
+      var item = g.items[vi];
+      var c = item.car;
+      var r = item.r;
+      var sidx = item.sidx;
+      var isPos = r.benef !== null && r.benef >= 0;
+      var bcolor = isPos ? 'var(--pos)' : 'var(--neg)';
+      var mp = r.revient > 0 ? Math.min(Math.abs((r.marge||0)*100), 100) : 0;
+
+      var photoHtml = c.photo
+        ? '<img src="' + c.photo + '" style="width:100%;height:130px;object-fit:cover;display:block;">'
+        : '';
+
+      h += '<div style="background:var(--n2);border:1px solid var(--g1);margin-bottom:7px;overflow:hidden;">' +
+        // Barre couleur
+        '<div style="height:1.5px;background:' + bcolor + ';"></div>' +
+        photoHtml +
+        // Infos voiture
+        '<div style="padding:12px 13px;border-bottom:1px solid var(--g1);">' +
+          '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">' +
+            '<div style="flex:1;">' +
+              '<div style="font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--g4);margin-bottom:3px;">' + (c.drevente||'--') + '</div>' +
+              '<div style="font-size:17px;font-weight:900;">' + (c.marque||'?') + ' ' + (c.modele||'') + '</div>' +
+            '</div>' +
+            '<div style="text-align:right;flex-shrink:0;">' +
+              '<div style="font-size:8px;letter-spacing:1.5px;text-transform:uppercase;color:' + bcolor + ';margin-bottom:2px;">' + (isPos?'BENEFICE':'PERTE') + '</div>' +
+              '<div style="font-size:19px;font-weight:900;color:' + bcolor + ';">' + (isPos?'+':'') + E(r.benef) + '</div>' +
+              '<div style="font-size:10px;color:var(--g4);">' + (r.marge !== null ? P(r.marge) : '--') + '</div>' +
             '</div>' +
           '</div>' +
-          '<button id="compta_' + sidx + '" style="background:rgba(40,120,60,.2);border:1px solid rgba(40,120,60,.4);color:var(--pos);padding:6px 12px;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;">Annuler</button>' +
-        '</div>'
-        :
-        '<div style="background:rgba(184,151,58,.08);border-top:1px solid rgba(184,151,58,.2);padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">' +
-          '<div style="font-size:11px;color:var(--g4);">Investissements et benefices recuperes ?</div>' +
-          '<button id="compta_' + sidx + '" style="background:var(--or);border:none;color:#000;padding:8px 14px;font-size:10px;font-weight:800;letter-spacing:1px;cursor:pointer;">&#x2705; Comptabiliser</button>' +
-        '</div>'
-      ) +
-
-      // Boutons
-      '<div style="display:flex;border-top:1px solid var(--grey);">' +
-        '<div onclick="openSoldDetail(' + sidx + ')" style="flex:1;padding:13px;text-align:center;font-size:10px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--or2);cursor:pointer;border-right:1px solid var(--grey);">Detail complet</div>' +
-        '<button id="delsold_' + sidx + '" style="flex:1;padding:13px;background:transparent;border:none;color:var(--neg);font-size:10px;font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;">&#x1F5D1; Supprimer</button>' +
-      '</div>' +
-    '</div>';
+          // Barre progression
+          '<div style="height:1.5px;background:var(--g1);margin-top:9px;overflow:hidden;">' +
+            '<div style="height:100%;width:' + mp + '%;background:' + bcolor + ';"></div>' +
+          '</div>' +
+        '</div>' +
+        // Chiffres
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--g1);">' +
+          '<div style="background:var(--n3);padding:10px;text-align:center;">' +
+            '<div style="font-size:7px;letter-spacing:2px;text-transform:uppercase;color:var(--g4);margin-bottom:3px;">ACHAT</div>' +
+            '<div style="font-size:12px;font-weight:800;">' + E(r.achat) + '</div>' +
+          '</div>' +
+          '<div style="background:var(--n3);padding:10px;text-align:center;">' +
+            '<div style="font-size:7px;letter-spacing:2px;text-transform:uppercase;color:var(--g4);margin-bottom:3px;">REVIENT</div>' +
+            '<div style="font-size:12px;font-weight:800;color:var(--neg);">' + E(r.revient) + '</div>' +
+          '</div>' +
+          '<div style="background:var(--n3);padding:10px;text-align:center;">' +
+            '<div style="font-size:7px;letter-spacing:2px;text-transform:uppercase;color:var(--g4);margin-bottom:3px;">VENDU</div>' +
+            '<div style="font-size:12px;font-weight:800;color:var(--or2);">' + E(r.revente) + '</div>' +
+          '</div>' +
+        '</div>' +
+        // Part 50/50
+        '<div style="display:flex;gap:1px;background:var(--g1);">' +
+          '<div style="flex:1;background:var(--n3);padding:9px;text-align:center;">' +
+            '<div style="font-size:9px;font-weight:800;color:var(--rouge);letter-spacing:1px;">YOUSSEF</div>' +
+            '<div style="font-size:13px;font-weight:900;margin-top:3px;">' + (r.benef!==null?E(r.benef/2):'--') + '</div>' +
+          '</div>' +
+          '<div style="flex:1;background:var(--n3);padding:9px;text-align:center;">' +
+            '<div style="font-size:9px;font-weight:800;color:#6AAAFF;letter-spacing:1px;">ALEX</div>' +
+            '<div style="font-size:13px;font-weight:900;margin-top:3px;">' + (r.benef!==null?E(r.benef/2):'--') + '</div>' +
+          '</div>' +
+        '</div>' +
+        // Badge comptabilise
+        (c.comptabilise ?
+          '<div style="background:rgba(26,100,54,.12);border-top:1px solid rgba(26,100,54,.25);padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">' +
+            '<div style="display:flex;align-items:center;gap:7px;">' +
+              '<span style="font-size:13px;">&#x2705;</span>' +
+              '<div><div style="font-size:10px;font-weight:800;color:var(--pos);letter-spacing:1px;">COMPTABILISE</div>' +
+              '<div style="font-size:9px;color:var(--g4);">Le ' + (c.comptabiliseDate||'--') + ' par ' + (c.comptabilisePar||'--') + '</div></div>' +
+            '</div>' +
+            '<button id="compta_' + vi + '_' + gi + '" style="background:rgba(26,100,54,.2);border:1px solid rgba(26,100,54,.35);color:var(--pos);padding:5px 10px;font-size:9px;font-weight:700;letter-spacing:1px;cursor:pointer;">Annuler</button>' +
+          '</div>'
+          :
+          '<div style="background:rgba(200,150,60,.05);border-top:1px solid rgba(200,150,60,.15);padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">' +
+            '<div style="font-size:10px;color:var(--g4);">Investissements recuperes ?</div>' +
+            '<button id="compta_' + vi + '_' + gi + '" style="background:var(--or);border:none;color:#000;padding:7px 13px;font-size:9px;font-weight:900;letter-spacing:1px;cursor:pointer;">&#x2705; Comptabiliser</button>' +
+          '</div>'
+        ) +
+        // Actions
+        '<div style="display:flex;border-top:1px solid var(--g1);">' +
+          '<div onclick="openSoldDetail(' + sidx + ')" style="flex:1;padding:11px;text-align:center;font-size:8.5px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--or2);cursor:pointer;border-right:1px solid var(--g1);">Detail &#x203A;</div>' +
+          '<button id="delsold_' + vi + '_' + gi + '" style="flex:1;padding:11px;background:transparent;border:none;color:var(--neg);font-size:8.5px;font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;">&#x1F5D1; Supprimer</button>' +
+        '</div>' +
+      '</div>';
+    }
+    h += '</div>'; // fin groupe mois
   }
 
   el.innerHTML = h;
 
   // Attacher evenements
-  for (var k = 0; k < sold.length; k++) {
-    (function(sidx2) {
-      var btn = document.getElementById('delsold_' + sidx2);
-      if (btn) {
-        btn.addEventListener('click', function(e) {
-          e.stopPropagation();
-          delSold(sidx2);
-        });
-      }
-      var btnC = document.getElementById('compta_' + sidx2);
-      if (btnC) {
-        btnC.addEventListener('click', function(e) {
-          e.stopPropagation();
-          comptabiliser(sidx2);
-        });
-      }
-    })(k);
+  for (var gi2 = 0; gi2 < ordreGroupes.length; gi2++) {
+    var g2 = groupes[ordreGroupes[gi2]];
+    for (var vi2 = 0; vi2 < g2.items.length; vi2++) {
+      (function(sidx2, vi3, gi3) {
+        var btnD = document.getElementById('delsold_' + vi3 + '_' + gi3);
+        if (btnD) btnD.addEventListener('click', function(e) { e.stopPropagation(); delSold(sidx2); });
+        var btnC = document.getElementById('compta_' + vi3 + '_' + gi3);
+        if (btnC) btnC.addEventListener('click', function(e) { e.stopPropagation(); comptabiliser(sidx2); });
+      })(g2.items[vi2].sidx, vi2, gi2);
+    }
   }
 }
 
